@@ -4,3 +4,4 @@ paramiko
 scp
 flask
 requests
+mysql-connector-python

@@ -1,25 +1,44 @@
 from flask import Flask, request, jsonify
 import requests
+import logging
+import json
 
 app = Flask(__name__)
 
-#TODO: IP du Trusted Host
-TRUSTED_HOST_URL = "http://<TRUSTED_HOST_IP>:80"
+with open("instances_ips.json", "r") as f:
+        instance_ips = json.load(f)
+
+trusted_host_ip = instance_ips["trusted_host_ip"]
+
+# URL du Trusted Host
+TRUSTED_HOST_URL = f"http://{trusted_host_ip}:5000"
+
+# Configuration des logs
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("GatekeeperApp")
+
+@app.route("/", methods=["GET"])
+def health_check():
+    logger.info("Health check requested")
+    return "Gatekeeper OK", 200
 
 @app.route("/", methods=["POST"])
 def validate_and_forward():
     # Validation basique des données
     data = request.json
-    if not data or "operation" not in data or "payload" not in data:
+    logger.info(f"Received data: {data}")
+    if not data or "query" not in data:
+        logger.warning("Invalid request format")
         return jsonify({"error": "Invalid request format"}), 400
 
     # Transmettre les requêtes validées au Trusted Host
     try:
-        response = requests.post(TRUSTED_HOST_URL, json=data)
+        response = requests.post(f"{TRUSTED_HOST_URL}/query", json=data)
+        logger.info(f"Response from trusted host: {response.status_code}")
         return jsonify(response.json()), response.status_code
     except requests.exceptions.RequestException as e:
+        logger.error(f"Error forwarding request: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=80)
-
+    app.run(host="0.0.0.0", port=5000)

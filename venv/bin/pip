@@ -1,4 +1,4 @@
-#!/Users/tristanlachance/Documents/GitHub/LOG8415-Final-assignment/venv/bin/python3.12
+#!/Users/tristanlachance/Documents/GitHub/LOG8415_final_assignment/venv/bin/python3.12
 # -*- coding: utf-8 -*-
 import re
 import sys
