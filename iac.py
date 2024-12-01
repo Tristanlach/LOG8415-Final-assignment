@@ -497,8 +497,58 @@ class EC2Manager:
         except Exception as e:
             print(f"An error occurred while executing on {self.gatekeeper_instance.public_ip_address}: {e}")
         finally:
-            ssh_client.close()    
+            ssh_client.close()   
+
+    def run_sysbench_benchmark(self):
+        """
+        Perform MySQL benchmarking using Sysbench on all MySQL instances.
+        """
+        benchmark_commands = [
+            # Prepare the database for Sysbench
+            "sudo sysbench /usr/share/sysbench/oltp_read_write.lua --mysql-db=sakila --mysql-user=root --mysql-password='password' prepare",
+            
+            # Run the Sysbench benchmark
+            "sudo sysbench /usr/share/sysbench/oltp_read_write.lua --mysql-db=sakila --mysql-user=root --mysql-password='password' --time=60 --threads=4 run",
+            
+            # Clean up after benchmarking
+            "sudo sysbench /usr/share/sysbench/oltp_read_write.lua --mysql-db=sakila --mysql-user=root --mysql-password='password' cleanup"
+        ]
+
+        results = {}
+
+        try:
+            # Execute Sysbench commands on all MySQL instances
+            for instance in self.worker_instances + [self.manager_instance]:
+                ssh_client = create_ssh_client(instance.public_ip_address, "ubuntu", self.ssh_key_path)
+                instance_results = []
+                print(f"Running Sysbench on instance {instance.public_ip_address}...")
+
+                for command in benchmark_commands:
+                    print(f"Executing command: {command} on instance {instance.public_ip_address}")
+                    stdin, stdout, stderr = ssh_client.exec_command(command)
+
+                    # Capture output
+                    output = stdout.read().decode()
+                    error_output = stderr.read().decode()
+
+                    # Log results
+                    if "run" in command:
+                        instance_results.append(output)  # Save the benchmark result
+                        print(f"Benchmark output for {instance.public_ip_address}:\n{output}")
+                    elif error_output:
+                        print(f"Error on {instance.public_ip_address}: {error_output}")
+
+                # Store results for the instance
+                results[instance.public_ip_address] = instance_results
+                ssh_client.close()
+
+        except Exception as e:
+            print(f"An error occurred while benchmarking: {e}")
+
+        return results
+
     
+    # Benchmarking of the clusters
     def benchmarks(self):
         """
         Measure response times of MySQL cluster for read and write requests per mode.
@@ -593,6 +643,10 @@ time.sleep(5)
 print("Running SQL setup on MySQL instances...")
 ec2_manager.run_sql_sakila_install()
 print("SQL setup complete.")
+
+print("Running Sysbench benchmark on MySQL instances...")
+sysbench_results = ec2_manager.run_sysbench_benchmark()
+print(f"Sysbench results:\n{sysbench_results}")
 
 ec2_manager.configure_instance(ec2_manager.proxy_instance)
 ec2_manager.configure_instance(ec2_manager.gatekeeper_instance)
