@@ -47,7 +47,8 @@ def process_request():
         mode = data.get("mode", "direct_hit")
         target_url = None
         if mode == "direct_hit":
-            target_url = WORKER_URLS[0]  # Direct to the first worker
+            # Direct to the master
+            target_url = MANAGER_URL
         elif mode == "random":
             target_url = random.choice(WORKER_URLS)
         elif mode == "customized":

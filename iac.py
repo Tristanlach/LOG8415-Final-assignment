@@ -234,9 +234,11 @@ class EC2Manager:
 
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 5000,  # MySQL
+                        "FromPort": 5000,  # From Proxy and manager
                         "ToPort": 5000,
-                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                        "IpRanges": [{"CidrIp": f"{self.proxy_instance.public_ip_address}/32"},
+                                     
+                                    {"CidrIp": f"{self.manager_instance.public_ip_address}/32"}],
                     },
                 ],
             )
@@ -252,14 +254,13 @@ class EC2Manager:
                         "IpProtocol": "tcp",
                         "FromPort": 22,  # SSH
                         "ToPort": 22,
-                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}], # SSH
                     },
-
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 5000,  # Proxy
+                        "FromPort": 5000,  # From trusted host
                         "ToPort": 5000,
-                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                        "IpRanges": [{"CidrIp": f"{self.trusted_host_instance.public_ip_address}/32"}], 
                     },
                 ],
             )
@@ -280,9 +281,9 @@ class EC2Manager:
 
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 5000,  # Trusted Host
+                        "FromPort": 5000,  # From Gatekeeper
                         "ToPort": 5000,
-                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                        "IpRanges": [{"CidrIp": f"{self.gatekeeper_instance.public_ip_address}/32"}],
                     },
                 ],
             )
@@ -303,7 +304,7 @@ class EC2Manager:
 
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 5000,  # Gatekeeper
+                        "FromPort": 5000,  # From any IP
                         "ToPort": 5000,
                         "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
                     },                
@@ -589,6 +590,9 @@ ec2_manager.upload_flask_apps_to_instances()
 # Execute Flask apps on instances
 print("Executing Flask apps on instances...")
 ec2_manager.execute_flask_apps_on_instances()
+
+print("Waiting for instances to be ready...")
+time.sleep(20)
 
 # Send requests to the Gatekeeper for benchmarking
 print("Sending requests to the Gatekeeper...")
