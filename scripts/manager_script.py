@@ -49,7 +49,25 @@ def handle_request():
             cursor = conn.cursor()
             cursor.execute(query)
             conn.commit()
+
+            # Réplication de la requête aux workers
+            replication_errors = []
+            for worker_url in WORKER_URLS:
+                try:
+                    replication_response = requests.post(worker_url, json={"query": query})
+                    if replication_response.status_code != 200:
+                        replication_errors.append(f"Worker {worker_url} error: {replication_response.text}")
+                except requests.exceptions.RequestException as e:
+                    replication_errors.append(f"Worker {worker_url} exception: {str(e)}")
+
+            if replication_errors:
+                return jsonify({
+                    "status": "partial_success",
+                    "message": "Local write succeeded, but some workers failed",
+                    "errors": replication_errors
+                }), 207
             return jsonify({"status": "success"}), 200
+
         except mysql.connector.Error as err:
             return jsonify({"error": str(err)}), 500
         finally:

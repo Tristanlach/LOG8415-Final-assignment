@@ -518,38 +518,53 @@ class EC2Manager:
         results = {}
 
         for mode in modes:
-            print(f"Testing mode: {mode}")
+            print(f"\n=== Testing mode: {mode} ===")
             mode_results = {"read_times": [], "write_times": []}
+            errors = {"read_errors": [], "write_errors": []}
 
             for query_type, query in queries.items():
-                num_requests = 10  # 1000 reads and writes per mode
-
+                num_requests = 1000  # Adjust as needed
                 times = []
-                for _ in range(num_requests):
+                print(f"  {query_type.capitalize()} Queries:")
+
+                for i in range(num_requests):
                     start_time = time.time()
                     payload = {"query": query, "type": query_type, "mode": mode}
                     try:
                         response = requests.post(gatekeeper_url, json=payload)
+                        elapsed_time = time.time() - start_time
+
                         if response.status_code == 200:
-                            elapsed_time = time.time() - start_time
                             times.append(elapsed_time)
+                            print(f"    Request {i+1}: Success (Time: {elapsed_time:.4f} seconds)")
                         else:
-                            print(f"Request failed with status {response.status_code}: {response.text}")
+                            error_message = f"Error {response.status_code}: {response.text}"
+                            errors[f"{query_type}_errors"].append(error_message)
+                            print(f"    Request {i+1}: Failed - {error_message}")
                     except requests.exceptions.RequestException as e:
-                        print(f"Request exception: {e}")
+                        error_message = f"Request exception: {str(e)}"
+                        errors[f"{query_type}_errors"].append(error_message)
+                        print(f"    Request {i+1}: Failed - {error_message}")
+
                 average_time = sum(times) / len(times) if times else float('inf')
                 mode_results[f"{query_type}_average_time"] = average_time
-                print(f"Average {query_type} time for mode {mode}: {average_time:.4f} seconds")
+                print(f"  Average {query_type} time for mode {mode}: {average_time:.4f} seconds")
 
             results[mode] = mode_results
+            results[mode].update(errors)  # Add errors to results
 
-        print("Benchmark results summary:")
+        print("\n=== Benchmark results summary ===")
         for mode, stats in results.items():
             print(f"Mode: {mode}")
             print(f"  Average Read Time: {stats.get('read_average_time', 'N/A'):.4f} seconds")
             print(f"  Average Write Time: {stats.get('write_average_time', 'N/A'):.4f} seconds")
+            if stats.get("read_errors"):
+                print(f"  Read Errors: {stats['read_errors']}")
+            if stats.get("write_errors"):
+                print(f"  Write Errors: {stats['write_errors']}")
 
         return results
+
 
 
 # Main 
