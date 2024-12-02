@@ -535,6 +535,11 @@ class EC2Manager:
                     if "run" in command:
                         instance_results.append(output)  # Save the benchmark result
                         print(f"Benchmark output for {instance.public_ip_address}:\n{output}")
+                        # Write the output to a local file
+                        filename = f"sysbench_result_{instance.public_ip_address}.txt"
+                        with open(filename, 'w') as f:
+                            f.write(output)
+                        print(f"Sysbench result saved to {filename}")
                     elif error_output:
                         print(f"Error on {instance.public_ip_address}: {error_output}")
 
@@ -646,7 +651,7 @@ print("SQL setup complete.")
 
 print("Running Sysbench benchmark on MySQL instances...")
 sysbench_results = ec2_manager.run_sysbench_benchmark()
-print(f"Sysbench results:\n{sysbench_results}")
+print("Sysbench benchmarks completed. Results are saved in local files.")
 
 ec2_manager.configure_instance(ec2_manager.proxy_instance)
 ec2_manager.configure_instance(ec2_manager.gatekeeper_instance)
