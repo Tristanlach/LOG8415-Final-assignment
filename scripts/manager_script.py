@@ -18,35 +18,28 @@ with open("instances_ips.json", "r") as f:
 
 WORKER_URLS = [f"http://{ip}:5000" for ip in worker_ips]
 
-def get_fastest_worker():
-    response_times = {}
-    for worker in WORKER_URLS:
-        try:
-            response = requests.get(worker + "/health", timeout=2)
-            response_times[worker] = response.elapsed.total_seconds()
-        except requests.exceptions.RequestException:
-            response_times[worker] = float('inf')
-    return min(response_times, key=response_times.get)
-
 @app.route("/", methods=["GET"])
 def health_check():
     return "Manager OK", 200
 
 @app.route("/", methods=["POST"])
 def handle_request():
-    data = request.json
-    if not data or "query" not in data or "type" not in data:
-        return jsonify({"error": "Invalid request format"}), 400
+    try:
+        # Lecture des données de la requête
+        data = request.json
+        if not data or "query" not in data or "type" not in data:
+            return jsonify({"error": "Invalid request format"}), 400
 
-    query = data["query"]
-    request_type = data["type"].lower()
-    mode = data.get("mode", "direct_hit").lower()
+        query = data["query"]
+        request_type = data["type"].lower()
+        is_write_query = request_type == "write"
 
-    if request_type == "write":
-        # Handle write operations locally
-        try:
-            conn = mysql.connector.connect(**DB_CONFIG)
-            cursor = conn.cursor()
+        # Connexion à la base de données
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cursor = conn.cursor(dictionary=True)
+
+        if is_write_query:
+            # Requête d'écriture locale
             cursor.execute(query)
             conn.commit()
 
@@ -66,32 +59,26 @@ def handle_request():
                     "message": "Local write succeeded, but some workers failed",
                     "errors": replication_errors
                 }), 207
-            return jsonify({"status": "success"}), 200
-
-        except mysql.connector.Error as err:
-            return jsonify({"error": str(err)}), 500
-        finally:
-            if conn.is_connected():
-                cursor.close()
-                conn.close()
-    elif request_type == "read":
-        # Handle read operations by communicating with workers
-        if mode == "direct_hit":
-            target_worker = WORKER_URLS[0]
-        elif mode == "random":
-            target_worker = random.choice(WORKER_URLS)
-        elif mode == "customized":
-            target_worker = get_fastest_worker()
+            return jsonify({"message": "Write query executed successfully"}), 200
         else:
-            return jsonify({"error": "Invalid mode"}), 400
+            # Requête de lecture locale
+            cursor.execute(query)
+            result = cursor.fetchall()
+            return jsonify(result), 200
 
-        try:
-            response = requests.post(target_worker, json={"query": query})
-            return jsonify(response.json()), response.status_code
-        except requests.exceptions.RequestException as e:
-            return jsonify({"error": str(e)}), 500
-    else:
-        return jsonify({"error": "Invalid request type"}), 400
+    except mysql.connector.Error as err:
+        # Gestion des erreurs MySQL
+        return jsonify({"error": f"MySQL error: {err}"}), 500
+
+    except Exception as e:
+        # Gestion des erreurs générales
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        # Fermeture de la connexion à la base de données
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
