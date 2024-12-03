@@ -313,61 +313,7 @@ class EC2Manager:
             print("Inbound rule added to the security group for port 5000.")
         except Exception as e:
             print(f"An error occurred while adding inbound rule: {e}")
-
-    def _remove_insecure_ssh_access(self):
-        """
-        Remove the SSH access rule (0.0.0.0/0) from the trusted host security group.
-        """
-        try:
-            self.ec2_client.revoke_security_group_ingress(
-                GroupId=self.security_group_trusted_host,
-                IpPermissions=[
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 22,
-                        "ToPort": 22,
-                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
-                    }
-                ],
-            )
-
-            print("Insecure SSH access rule removed from the trusted host security group.")
-        except Exception as e:
-            print(f"An error occurred while removing insecure SSH access: {e}")
-
-        try:
-            self.ec2_client.revoke_security_group_ingress(
-                GroupId=self.security_group_proxy,
-                IpPermissions=[
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 22,
-                        "ToPort": 22,
-                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
-                    }
-                ],
-            )
-
-            print("Insecure SSH access rule removed from the proxy security group.")
-        except Exception as e:
-            print(f"An error occurred while removing insecure SSH access: {e}")
-
-        try:
-            self.ec2_client.revoke_security_group_ingress(
-                GroupId=self.security_group_mysql,
-                IpPermissions=[
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 22,
-                        "ToPort": 22,
-                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
-                    }
-                ],
-            )
-
-            print("Insecure SSH access rule removed from the mysql security group.")
-        except Exception as e:
-            print(f"An error occurred while removing insecure SSH access: {e}")
+            
 
     def _get_latest_ubuntu_ami(self):
         """
@@ -711,9 +657,6 @@ print("Sysbench benchmarks completed. Results are saved in local files.")
 ec2_manager.configure_instance(ec2_manager.proxy_instance)
 ec2_manager.configure_instance(ec2_manager.gatekeeper_instance)
 ec2_manager.configure_instance(ec2_manager.trusted_host_instance)
-
-print("Removing insecure SSH access...")
-ec2_manager._remove_insecure_ssh_access()
 
 # Upload Flask apps to instances
 print("Uploading Flask apps to instances...")
