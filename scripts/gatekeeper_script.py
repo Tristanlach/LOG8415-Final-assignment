@@ -10,10 +10,9 @@ with open("instances_ips.json", "r") as f:
 
 trusted_host_ip = instance_ips["trusted_host_ip"]
 
-# URL du Trusted Host
 TRUSTED_HOST_URL = f"http://{trusted_host_ip}:5000"
 
-# Configuration des logs
+# Logs configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("GatekeeperApp")
 
@@ -24,14 +23,14 @@ def health_check():
 
 @app.route("/", methods=["POST"])
 def validate_and_forward():
-    # Validation basique des données
+    # Basic data validation
     data = request.json
     logger.info(f"Received data: {data}")
     if not data or "query" not in data:
         logger.warning("Invalid request format")
         return jsonify({"error": "Invalid request format"}), 400
 
-    # Transmettre les requêtes validées au Trusted Host
+    # Transmits the query to the trusted host
     try:
         response = requests.post(f"{TRUSTED_HOST_URL}/query", json=data)
         logger.info(f"Response from trusted host: {response.status_code}")

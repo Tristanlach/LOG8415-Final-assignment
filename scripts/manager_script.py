@@ -25,7 +25,7 @@ def health_check():
 @app.route("/", methods=["POST"])
 def handle_request():
     try:
-        # Lecture des données de la requête
+        # Read and validate the request data
         data = request.json
         if not data or "query" not in data or "type" not in data:
             return jsonify({"error": "Invalid request format"}), 400
@@ -34,16 +34,16 @@ def handle_request():
         request_type = data["type"].lower()
         is_write_query = request_type == "write"
 
-        # Connexion à la base de données
+        # Connection to the database
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor(dictionary=True)
 
         if is_write_query:
-            # Requête d'écriture locale
+            # Local write query
             cursor.execute(query)
             conn.commit()
 
-            # Réplication de la requête aux workers
+            # Replication to workers
             replication_errors = []
             for worker_url in WORKER_URLS:
                 try:
@@ -61,21 +61,21 @@ def handle_request():
                 }), 207
             return jsonify({"message": "Write query executed successfully"}), 200
         else:
-            # Requête de lecture locale
+            # Local read query
             cursor.execute(query)
             result = cursor.fetchall()
             return jsonify(result), 200
 
     except mysql.connector.Error as err:
-        # Gestion des erreurs MySQL
+        # Error handling for MySQL
         return jsonify({"error": f"MySQL error: {err}"}), 500
 
     except Exception as e:
-        # Gestion des erreurs générales
+        # Error handling for other exceptions
         return jsonify({"error": str(e)}), 500
 
     finally:
-        # Fermeture de la connexion à la base de données
+        # Close the database connection
         if 'conn' in locals() and conn.is_connected():
             cursor.close()
             conn.close()

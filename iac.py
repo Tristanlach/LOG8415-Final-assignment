@@ -79,10 +79,10 @@ class EC2Manager:
                 MinCount=1,
                 MaxCount=1,
 
-            )[0]  # Accéder à l'unique instance créée
+            )[0]
             self.worker_instances.append(worker_instance)
 
-        # Lancer l'instance manager
+        # Launch manager instance
         self.manager_instance = self.ec2_resource.create_instances(
             ImageId=self.ami_id,
             InstanceType="t2.micro",
@@ -90,9 +90,9 @@ class EC2Manager:
             SecurityGroupIds=[self.security_group_mysql],
             MinCount=1,
             MaxCount=1,
-        )[0]  # Accéder à l'unique instance créée
+        )[0]
 
-        # Lancer l'instance Proxy
+        # Launch proxy instance
         self.proxy_instance = self.ec2_resource.create_instances(
             ImageId=self.ami_id,
             InstanceType="t2.large",
@@ -100,7 +100,7 @@ class EC2Manager:
             MaxCount=1,
             SecurityGroupIds=[self.security_group_proxy],
             KeyName=self.key_name,
-        )[0]  # Accéder à l'unique instance créée
+        )[0]
 
         # Lancer l'instance Trusted Host
         self.trusted_host_instance = self.ec2_resource.create_instances(
@@ -110,10 +110,10 @@ class EC2Manager:
             MaxCount=1,
             SecurityGroupIds=[self.security_group_trusted_host],
             KeyName=self.key_name,
-        )[0]  # Accéder à l'unique instance créée
+        )[0]
 
 
-        # Lancer l'instance Gatekeeper
+        # Launch gatekeeper instance
         self.gatekeeper_instance = self.ec2_resource.create_instances(
             ImageId=self.ami_id,
             InstanceType="t2.large",
@@ -121,14 +121,14 @@ class EC2Manager:
             MaxCount=1,
             SecurityGroupIds=[self.security_group_gatekeeper],
             KeyName=self.key_name,
-        )[0]  # Accéder à l'unique instance créée
+        )[0]
 
         return self.worker_instances + [self.manager_instance] + [self.proxy_instance] + [self.gatekeeper_instance] + [self.trusted_host_instance]
 
 
     def run_sql_sakila_install(self):
         commands = [
-            # Mise à jour et installation des paquets
+            # Update and dependencies installation
             "sudo apt-get update",
             "sudo apt-get install -y mysql-server wget sysbench python3-pip",
             "sudo pip3 install flask mysql-connector-python requests",
@@ -137,24 +137,24 @@ class EC2Manager:
             "sudo systemctl start mysql",
             "sudo systemctl enable mysql",
 
-            # Configuration du mot de passe root MySQL
+            # Password root MySQL configuration
             'sudo mysql -e \'ALTER USER "root"@"localhost" IDENTIFIED WITH "mysql_native_password" BY "password";\'',
             
-            # Téléchargement et extraction de la base Sakila
+            # Download Sakila database
             "wget -O /tmp/sakila-db.tar.gz https://downloads.mysql.com/docs/sakila-db.tar.gz",
             "tar -xvzf /tmp/sakila-db.tar.gz -C /tmp",
 
-            # Importation de la base Sakila dans MySQL
+            # Import Sakila in MySQL
             "sudo mysql -u root --password=password < /tmp/sakila-db/sakila-schema.sql",
             "sudo mysql -u root --password=password < /tmp/sakila-db/sakila-data.sql",
             
-            # Préparation pour Sysbench
+            # Prepare for Sysbench
             "sudo sysbench /usr/share/sysbench/oltp_read_only.lua --mysql-db=sakila --mysql-user=root --mysql-password='password' prepare",
             
-            # Exécution du benchmark Sysbench
+            # Execution of benchmark Sysbench
             "sudo sysbench /usr/share/sysbench/oltp_read_only.lua --mysql-db=sakila --mysql-user=root --mysql-password='password' run",
             
-            # Nettoyage après le benchmark
+            # Cleaning after benchmark
             "sudo sysbench /usr/share/sysbench/oltp_read_only.lua --mysql-db=sakila --mysql-user=root --mysql-password='password' cleanup"
     ]
 
@@ -192,7 +192,7 @@ class EC2Manager:
             "pip3 install flask requests",
         ]
 
-        # Exécuter les commandes sur l'instance Proxy
+        # Execute the commands on the proxy instance
         try:
             # Connect to the instance
             ssh_client = create_ssh_client(instance.public_ip_address, "ubuntu", self.ssh_key_path)
@@ -313,6 +313,61 @@ class EC2Manager:
             print("Inbound rule added to the security group for port 5000.")
         except Exception as e:
             print(f"An error occurred while adding inbound rule: {e}")
+
+    def _remove_insecure_ssh_access(self):
+        """
+        Remove the SSH access rule (0.0.0.0/0) from the trusted host security group.
+        """
+        try:
+            self.ec2_client.revoke_security_group_ingress(
+                GroupId=self.security_group_trusted_host,
+                IpPermissions=[
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                    }
+                ],
+            )
+
+            print("Insecure SSH access rule removed from the trusted host security group.")
+        except Exception as e:
+            print(f"An error occurred while removing insecure SSH access: {e}")
+
+        try:
+            self.ec2_client.revoke_security_group_ingress(
+                GroupId=self.security_group_proxy,
+                IpPermissions=[
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                    }
+                ],
+            )
+
+            print("Insecure SSH access rule removed from the proxy security group.")
+        except Exception as e:
+            print(f"An error occurred while removing insecure SSH access: {e}")
+
+        try:
+            self.ec2_client.revoke_security_group_ingress(
+                GroupId=self.security_group_mysql,
+                IpPermissions=[
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+                    }
+                ],
+            )
+
+            print("Insecure SSH access rule removed from the mysql security group.")
+        except Exception as e:
+            print(f"An error occurred while removing insecure SSH access: {e}")
 
     def _get_latest_ubuntu_ami(self):
         """
@@ -458,7 +513,7 @@ class EC2Manager:
                 ssh_client.close()
 
     def execute_flask_apps_on_instances(self) -> None:
-    # Exécuter les scripts Flask sur les instances
+    # Execute Flask apps on each instance
         for instance in self.worker_instances + [self.manager_instance]:
             try:
                 ssh_client = create_ssh_client(instance.public_ip_address, "ubuntu", self.ssh_key_path)
@@ -657,6 +712,9 @@ ec2_manager.configure_instance(ec2_manager.proxy_instance)
 ec2_manager.configure_instance(ec2_manager.gatekeeper_instance)
 ec2_manager.configure_instance(ec2_manager.trusted_host_instance)
 
+print("Removing insecure SSH access...")
+ec2_manager._remove_insecure_ssh_access()
+
 # Upload Flask apps to instances
 print("Uploading Flask apps to instances...")
 ec2_manager.upload_flask_apps_to_instances()
@@ -673,7 +731,7 @@ print("Sending requests to the Gatekeeper...")
 benchmark_results = ec2_manager.benchmarks()
 print(f"Benchmark results: {benchmark_results}")
 
-# Nettoyage après l'exécution
+# Cleaning up
 input("Press Enter to terminate and cleanup all resources...")
 ec2_manager.cleanup()
 print("Cleanup complete.")
